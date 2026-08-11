@@ -9,10 +9,11 @@ Status: `DRAFT — NOT DEPLOYED`
 - RPC: `https://studio.genlayer.com/api`
 - Contract: `AirDisruptionCauseLedger`
 - Classification: `UPGRADABLE`
-- Constructor argument: `upgrader_address` — must be a non-zero user-controlled wallet outside Studio
+- Constructor argument: `upgrader_address = 0x277bF20771129ae224042d23b0311C1AC5a9AC1b`
+- Selected deployer/upgrader: `0x277bF20771129ae224042d23b0311C1AC5a9AC1b` (valid EIP-55 checksum; user-selected; active-wallet verification still required immediately before deployment)
 - Linked contracts: none
 
-The final contract address, Explorer URL, deployment transaction, exact Git commit, contract SHA-256 and selected upgrader address must be recorded only after successful deployment and authoritative readback.
+The final contract address, Explorer URL, deployment transaction, exact Git commit and contract SHA-256 must be recorded only after successful deployment and authoritative readback.
 
 ## Storage compatibility
 
