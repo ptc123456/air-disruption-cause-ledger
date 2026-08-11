@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.venv/
+.pytest_cache/
+__pycache__/
+.vite-*.log
+.hallmark/
+.evidence/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
