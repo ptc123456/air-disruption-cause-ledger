@@ -12,7 +12,7 @@ Outcomes are `CARRIER_REPORTED`, `NAS_CORROBORATED`, `WEATHER_CORROBORATED`, `MI
 
 - `contracts/AirDisruptionCauseLedger.py` — authoritative flight cases, assessment, revisions, and review-routing state.
 - `src/` — React workbench using `genlayer-js` against Studionet.
-- `tests/` — direct-mode contract validation.
+- `tests/` — deterministic contract validation harness.
 
 There is no backend or database. Reads come from the contract. Writes wait for `FINALIZED`, require successful execution, and then perform authoritative readback.
 
@@ -48,10 +48,15 @@ Never place a placeholder address in `.env`.
 - Chain ID: `61999`
 - Wallet connection always opens an explicit provider selector.
 - The UI does not treat a hash or `ACCEPTED` status as success.
+- After submission, the UI persists the hash, chain, contract, sender, method, arguments, and case ID. A refresh resumes reconciliation through `getTransaction`, exact `FINALIZED` receipt checks, and authoritative readback; another write is blocked while that record remains unresolved.
+
+## Evidence provenance
+
+FAA evidence accepts only `nasstatus.faa.gov` or `www.faa.gov`; weather evidence accepts only `api.weather.gov` or `www.weather.gov`; revision evidence accepts only BTS TranStats or FAA ASPM. Carrier evidence is bound to the declared IATA code and its canonical hostname: AA/aa.com, AS/alaskaair.com, B6/jetblue.com, DL/delta.com, F9/flyfrontier.com, G4/allegiantair.com, HA/hawaiianairlines.com, NK/spirit.com, UA/united.com, or WN/southwest.com. Userinfo, ports, deceptive subdomains, category swaps, and carrier/flight-number mismatches fail before state creation.
 
 ## Evidence limits
 
-FAA NAS data describes system and airport conditions and does not investigate the cause of an individual flight delay. BTS/ASPM material may be delayed and may incorporate carrier-reported categories. The project therefore records a corroboration signal and revision history, not an official finding.
+FAA NAS data describes system and airport conditions and does not investigate the cause of an individual flight delay. BTS/ASPM material may be delayed and may incorporate carrier-reported categories. The project therefore records a corroboration signal, not an official finding. A revision overwrites the current assessment while retaining the revision counter and revision URL; it does not preserve immutable assessment history.
 
 ## Release status
 

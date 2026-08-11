@@ -29,7 +29,12 @@ def contract_instance():
     class Public:
         @staticmethod
         def write(fn):
-            return fn
+            def guarded(contract, *args, **kwargs):
+                if fn.__name__ == "upgrade" and module.gl.message.sender_address not in fake_root.upgraders.get():
+                    raise UserError("Sender is not an authorized upgrader")
+                return fn(contract, *args, **kwargs)
+
+            return guarded
 
         @staticmethod
         def view(fn):
@@ -77,6 +82,7 @@ def contract_instance():
     contract.case_ids = []
     contract._test_upgraders = fake_root.upgraders.get()
     contract._test_code = fake_root.code.get()
+    contract._test_gl = module.gl
     return contract, UserError
 
 
@@ -88,9 +94,25 @@ def test_constructor_registers_explicit_external_upgrader():
 
 def test_upgrade_replaces_code_slot_in_authorized_harness():
     contract, _ = contract_instance()
+    contract._test_gl.message.sender_address = contract.get_upgrader()
     contract._test_code.extend(b"old")
     contract.upgrade(b"new")
     assert bytes(contract._test_code) == b"new"
+
+
+def test_unauthorized_upgrade_rejected_without_code_or_application_mutation():
+    contract, user_error = contract_instance()
+    contract.register_case(*VALID_ARGS)
+    contract._test_code.extend(b"old")
+    code_before = bytes(contract._test_code)
+    case_before = contract.get_case(VALID_ARGS[0])
+    contract._test_gl.message.sender_address = "0x3333333333333333333333333333333333333333"
+
+    with pytest.raises(user_error, match="not an authorized upgrader"):
+        contract.upgrade(b"malicious")
+
+    assert bytes(contract._test_code) == code_before
+    assert contract.get_case(VALID_ARGS[0]) == case_before
 
 
 def test_register_and_duplicate_rejection():
@@ -215,8 +237,43 @@ def test_rejects_unofficial_faa_source():
     contract, user_error = contract_instance()
     args = list(VALID_ARGS)
     args[7] = "https://example.com/faa-copy"
-    with pytest.raises(user_error, match="approved official domain"):
+    with pytest.raises(user_error, match="FAA evidence"):
         contract.register_case(*args)
+
+
+@pytest.mark.parametrize(
+    "index,url,error",
+    [
+        (7, "https://api.weather.gov/alerts/active", "FAA evidence"),
+        (7, "https://nasstatus.faa.gov.attacker.example/", "FAA evidence"),
+        (8, "https://www.faa.gov/air_traffic", "weather evidence"),
+        (8, "https://api.weather.gov.attacker.example/", "weather evidence"),
+        (6, "https://attacker.example/flight/DL105", "Carrier evidence"),
+        (6, "https://www.delta.com.attacker.example/flight/DL105", "Carrier evidence"),
+    ],
+)
+def test_source_category_or_provenance_mismatch_fails_without_mutation(index, url, error):
+    contract, user_error = contract_instance()
+    args = list(VALID_ARGS)
+    args[index] = url
+
+    with pytest.raises(user_error, match=error):
+        contract.register_case(*args)
+
+    assert contract.cases == {}
+    assert contract.list_case_ids() == []
+
+
+def test_flight_number_must_match_declared_carrier_without_mutation():
+    contract, user_error = contract_instance()
+    args = list(VALID_ARGS)
+    args[2] = "AA105"
+
+    with pytest.raises(user_error, match="match the declared carrier"):
+        contract.register_case(*args)
+
+    assert contract.cases == {}
+    assert contract.list_case_ids() == []
 
 
 def test_revision_requires_provisional_assessment():

@@ -52,6 +52,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .transaction-strip { min-height: 4.25rem; padding: var(--space-md); display: flex; align-items: center; gap: var(--space-md); border-bottom: var(--rule-thin) solid var(--color-rule); background: var(--color-paper-2); color: var(--color-ink); }
 .transaction-strip div { min-width: 0; display: grid; gap: var(--space-xs); }
 .transaction-strip code { overflow: hidden; text-overflow: ellipsis; font: var(--text-sm)/1.3 var(--font-mono); color: var(--color-muted); }
+.transaction-strip button { margin-left: auto; flex: 0 0 auto; }
 .signal { width: .65rem; height: .65rem; flex: 0 0 auto; border-radius: 50%; background: var(--color-success); }
 .signal.busy { background: var(--color-accent); animation: pulse 1.4s var(--ease-in-out) infinite; }
 .signal.error { background: var(--color-error); }

@@ -1,5 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from 'react'
-import { collectWallets, readCase, requestWallet, writeAndReadback } from './genlayer'
+import {
+  collectWallets,
+  loadPendingOperation,
+  pendingMatchesContext,
+  readCase,
+  reconcilePendingOperation,
+  requestWallet,
+  writeAndReadback,
+} from './genlayer'
+import type { PendingOperation } from './genlayer'
 import type { FlightCase, HexAddress, WalletOption } from './types'
 
 const EMPTY = {
@@ -21,7 +30,9 @@ export default function App() {
   const [txHash, setTxHash] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState<PendingOperation | null>(() => loadPendingOperation())
   const walletDialog = useRef<HTMLDialogElement>(null)
+  const reconciling = useRef(false)
 
   useEffect(() => collectWallets(setWallets), [])
   useEffect(() => {
@@ -46,6 +57,25 @@ export default function App() {
       wallet.provider.removeListener?.('chainChanged', chainChanged)
     }
   }, [wallet])
+  useEffect(() => {
+    if (!pending) return
+    setTxHash(pending.hash)
+    if (!account) {
+      setStatus('Saved transaction found; connect its sender wallet to reconcile')
+      return
+    }
+    try {
+      if (!pendingMatchesContext(pending, account)) {
+        setError('Saved transaction belongs to a different sender or contract. Switch back to its exact context; it was not cleared or replayed.')
+        setStatus('Pending context mismatch')
+        return
+      }
+    } catch (reason) {
+      setError(message(reason))
+      return
+    }
+    if (!reconciling.current) void resumePending(pending)
+  }, [account, pending])
 
   async function connect(option: WalletOption) {
     setError('')
@@ -92,6 +122,30 @@ export default function App() {
       setError(message(reason))
       setStatus('Write not confirmed')
     } finally {
+      setPending(loadPendingOperation())
+      setBusy(false)
+    }
+  }
+
+  async function resumePending(operation: PendingOperation) {
+    if (reconciling.current) return
+    reconciling.current = true
+    setBusy(true)
+    setError('')
+    try {
+      const record = await reconcilePendingOperation(operation, (next, hash) => {
+        setStatus(next)
+        if (hash) setTxHash(hash)
+      })
+      setActiveCase(record)
+      setCaseId(operation.caseId)
+      setPending(null)
+    } catch (reason) {
+      setError(message(reason))
+      setStatus('Reconciliation not confirmed; no replay was submitted')
+      if (!loadPendingOperation()) setPending(null)
+    } finally {
+      reconciling.current = false
       setBusy(false)
     }
   }
@@ -139,7 +193,7 @@ export default function App() {
         <section className="intro" aria-labelledby="title">
           <p className="system-line">Evidence signal—not legal liability, compensation, or an official cause.</p>
           <h1 id="title">Trace what disrupted the flight.</h1>
-          <p>Freeze a flight identity, compare carrier claims with FAA and weather evidence, and retain every assessed revision on GenLayer.</p>
+          <p>Freeze a flight identity, compare carrier claims with FAA and weather evidence, and retain the current assessment with its revision marker on GenLayer.</p>
         </section>
 
         <section className="workbench" id="register" aria-labelledby="register-title">
@@ -154,7 +208,7 @@ export default function App() {
             <Input name="flightDate" label="Flight date" type="date" required />
             <Input name="origin" label="Origin IATA" placeholder="ATL" required maxLength={3} />
             <Input name="destination" label="Destination IATA" placeholder="LAX" required maxLength={3} />
-            <Input name="carrierUrl" label="Carrier flight-status URL" placeholder="https://airline.example/flight-status" type="url" required wide />
+            <Input name="carrierUrl" label="Official carrier flight-status URL" placeholder="https://www.delta.com/flight-status/search" type="url" required wide />
             <Input name="faaUrl" label="FAA NAS evidence URL" defaultValue={EMPTY.faaUrl} type="url" required wide />
             <Input name="weatherUrl" label="NWS evidence URL" defaultValue={EMPTY.weatherUrl} type="url" required wide />
             <button className="primary-action" type="submit" disabled={busy}>
@@ -179,6 +233,7 @@ export default function App() {
           <div className="transaction-strip" role="status" aria-live="polite">
             <span className={error ? 'signal error' : busy ? 'signal busy' : 'signal'} aria-hidden="true" />
             <div><strong>{status}</strong>{txHash && <code>{txHash}</code>}</div>
+            {pending && !busy && <button type="button" onClick={() => void resumePending(pending)}>Resume pending</button>}
           </div>
           {error && <p className="error-message" role="alert">{error}</p>}
 

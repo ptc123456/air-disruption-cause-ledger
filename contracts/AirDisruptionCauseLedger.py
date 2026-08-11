@@ -2,6 +2,7 @@
 
 from genlayer import *
 import json
+from urllib.parse import urlsplit
 
 
 OUTCOMES = (
@@ -11,6 +12,22 @@ OUTCOMES = (
     "MIXED_EVIDENCE",
     "INSUFFICIENT_EVIDENCE",
 )
+
+CARRIER_HOSTS = {
+    "AA": ("aa.com", "www.aa.com"),
+    "AS": ("alaskaair.com", "www.alaskaair.com"),
+    "B6": ("jetblue.com", "www.jetblue.com"),
+    "DL": ("delta.com", "www.delta.com"),
+    "F9": ("flyfrontier.com", "www.flyfrontier.com"),
+    "G4": ("allegiantair.com", "www.allegiantair.com"),
+    "HA": ("hawaiianairlines.com", "www.hawaiianairlines.com"),
+    "NK": ("spirit.com", "www.spirit.com"),
+    "UA": ("united.com", "www.united.com"),
+    "WN": ("southwest.com", "www.southwest.com"),
+}
+FAA_HOSTS = ("nasstatus.faa.gov", "www.faa.gov")
+WEATHER_HOSTS = ("api.weather.gov", "www.weather.gov")
+REVISION_HOSTS = ("www.transtats.bts.gov", "www.aspm.faa.gov")
 
 
 class AirDisruptionCauseLedger(gl.Contract):
@@ -44,9 +61,9 @@ class AirDisruptionCauseLedger(gl.Contract):
         origin = origin.strip().upper()
         destination = destination.strip().upper()
         self._validate_identity(case_id, carrier, flight_number, flight_date, origin, destination)
-        self._validate_source(carrier_url, False)
-        self._validate_source(faa_url, True)
-        self._validate_source(weather_url, True)
+        self._validate_carrier_source(carrier_url, carrier)
+        self._validate_source(faa_url, FAA_HOSTS, "FAA")
+        self._validate_source(weather_url, WEATHER_HOSTS, "weather")
         if case_id in self.cases:
             raise gl.vm.UserError("Case already exists")
 
@@ -205,29 +222,40 @@ END UNTRUSTED REVISION DATA
     ) -> None:
         if len(case_id) < 6 or len(case_id) > 96:
             raise gl.vm.UserError("Case ID must be 6-96 characters")
-        if len(carrier) < 2 or len(carrier) > 8 or len(flight_number) < 2 or len(flight_number) > 12:
-            raise gl.vm.UserError("Carrier or flight number is invalid")
+        if carrier not in CARRIER_HOSTS:
+            raise gl.vm.UserError("Carrier must use a supported IATA code")
+        flight_suffix = flight_number[len(carrier):]
+        if not flight_number.startswith(carrier) or not flight_suffix.isdigit() or len(flight_suffix) > 4:
+            raise gl.vm.UserError("Flight number must match the declared carrier")
         if len(flight_date) != 10 or flight_date[4] != "-" or flight_date[7] != "-":
             raise gl.vm.UserError("Flight date must use YYYY-MM-DD")
         if len(origin) != 3 or len(destination) != 3 or origin == destination:
             raise gl.vm.UserError("Use distinct three-letter airport codes")
 
-    def _validate_source(self, url: str, official_only: bool) -> None:
-        normalized = url.strip().lower()
-        if len(normalized) < 12 or len(normalized) > 500 or not normalized.startswith("https://"):
+    def _hostname(self, url: str) -> str:
+        value = url.strip()
+        if len(value) < 12 or len(value) > 500:
             raise gl.vm.UserError("Evidence URLs must be HTTPS and at most 500 characters")
-        if official_only and not (
-            normalized.startswith("https://nasstatus.faa.gov/")
-            or normalized.startswith("https://www.faa.gov/")
-            or normalized.startswith("https://api.weather.gov/")
-            or normalized.startswith("https://www.weather.gov/")
-        ):
-            raise gl.vm.UserError("FAA and weather evidence must use an approved official domain")
+        parsed = urlsplit(value)
+        try:
+            port = parsed.port
+        except ValueError:
+            raise gl.vm.UserError("Evidence URL port is invalid")
+        if parsed.scheme.lower() != "https" or parsed.username is not None or parsed.password is not None or port is not None:
+            raise gl.vm.UserError("Evidence URLs must use canonical HTTPS origins")
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        if hostname == "":
+            raise gl.vm.UserError("Evidence URL hostname is missing")
+        return hostname
+
+    def _validate_source(self, url: str, allowed_hosts: tuple[str, ...], category: str) -> None:
+        if self._hostname(url) not in allowed_hosts:
+            raise gl.vm.UserError(category + " evidence must use its approved official hostname")
+
+    def _validate_carrier_source(self, url: str, carrier: str) -> None:
+        if self._hostname(url) not in CARRIER_HOSTS[carrier]:
+            raise gl.vm.UserError("Carrier evidence hostname does not match the declared carrier")
 
     def _validate_revision_source(self, url: str) -> None:
-        normalized = url.strip().lower()
-        if len(normalized) > 500 or not (
-            normalized.startswith("https://www.transtats.bts.gov/")
-            or normalized.startswith("https://www.aspm.faa.gov/")
-        ):
+        if self._hostname(url) not in REVISION_HOSTS:
             raise gl.vm.UserError("Revision evidence must use BTS TranStats or FAA ASPM")
