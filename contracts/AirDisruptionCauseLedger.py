@@ -157,12 +157,12 @@ class AirDisruptionCauseLedger(gl.Contract):
         )
 
         def evaluate() -> dict:
-            carrier_text = gl.nondet.web.render(carrier_url, mode="text", wait_after_loaded="3s")[:12000]
-            faa_text = gl.nondet.web.render(faa_url, mode="text", wait_after_loaded="3s")[:12000]
-            weather_text = gl.nondet.web.render(weather_url, mode="text", wait_after_loaded="3s")[:12000]
+            carrier_text = self._render_source(carrier_url, "carrier")
+            faa_text = self._render_source(faa_url, "FAA")
+            weather_text = self._render_source(weather_url, "weather")
             revision_text = ""
             if revision_url != "":
-                revision_text = gl.nondet.web.render(revision_url, mode="text", wait_after_loaded="3s")[:12000]
+                revision_text = self._render_source(revision_url, "revision")
 
             prompt = f"""
 You classify how public evidence supports a disruption-cause signal for one US domestic flight.
@@ -212,6 +212,12 @@ END UNTRUSTED REVISION DATA
                 "the same evidence limits."
             ),
         )
+
+    def _render_source(self, url: str, category: str) -> str:
+        try:
+            return gl.nondet.web.render(url, mode="text", wait_after_loaded="3s")[:12000]
+        except Exception:
+            return "[SOURCE_UNAVAILABLE: " + category + "]"
 
     def _store_result(self, case_id: str, record: dict, result: dict, stage: str, revision_url: str) -> None:
         outcome = str(result["outcome"])

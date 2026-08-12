@@ -191,6 +191,14 @@ def test_provisional_result_changes_only_the_expected_state():
     assert record["revision"] == 1
 
 
+def test_web_render_failure_becomes_bounded_unavailable_evidence():
+    contract, _ = contract_instance()
+    contract._test_gl.nondet = types.SimpleNamespace(
+        web=types.SimpleNamespace(render=lambda *_args, **_kwargs: (_ for _ in ()).throw(Exception("WEBPAGE_LOAD_FAILED")))
+    )
+    assert contract._render_source(VALID_ARGS[6], "carrier") == "[SOURCE_UNAVAILABLE: carrier]"
+
+
 def test_mixed_evidence_routes_to_assistance_review():
     contract, _ = contract_instance()
     contract.register_case(*VALID_ARGS)
