@@ -267,7 +267,7 @@ export function assertSuccessfulReceipt(receipt: unknown): void {
     resultName?: string
     result_name?: string
     txExecutionResultName?: string
-    consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
+    consensus_data?: { leader_receipt?: Array<{ mode?: string, execution_result?: string }> }
   }
   const statuses = [value.statusName, value.status_name].filter((item): item is string => item !== undefined)
   if (statuses.length === 0 || statuses.some((status) => status !== 'FINALIZED')) {
@@ -278,7 +278,7 @@ export function assertSuccessfulReceipt(receipt: unknown): void {
   const executionChecks: boolean[] = []
   if (value.txExecutionResultName !== undefined) executionChecks.push(value.txExecutionResultName === 'FINISHED_WITH_RETURN')
   if (leaderReceipts !== undefined) {
-    executionChecks.push(leaderReceipts.length > 0 && leaderReceipts.at(-1)?.execution_result === 'SUCCESS')
+    executionChecks.push(authoritativeLeaderExecution(leaderReceipts) === 'SUCCESS')
   }
   if (consensus.length === 0 || consensus.some((result) => result !== 'MAJORITY_AGREE')
     || executionChecks.length === 0 || executionChecks.some((success) => !success)) {
@@ -294,14 +294,14 @@ function isExplicitFinalFailure(receipt: unknown): boolean {
     resultName?: string
     result_name?: string
     txExecutionResultName?: string
-    consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
+    consensus_data?: { leader_receipt?: Array<{ mode?: string, execution_result?: string }> }
   }
   const statuses = [value.statusName, value.status_name].filter((item): item is string => item !== undefined)
   if (statuses.length === 0 || statuses.some((status) => status !== 'FINALIZED')) return false
   const consensus = [value.resultName, value.result_name].filter((item): item is string => item !== undefined)
   if (consensus.length > 1 && consensus.some((result) => result !== consensus[0])) return false
   const camel = value.txExecutionResultName
-  const snake = value.consensus_data?.leader_receipt?.at(-1)?.execution_result
+  const snake = authoritativeLeaderExecution(value.consensus_data?.leader_receipt)
   if (camel !== undefined && snake !== undefined
     && !((camel === 'FINISHED_WITH_RETURN' && snake === 'SUCCESS')
       || (camel === 'FINISHED_WITH_ERROR' && snake === 'ERROR'))) return false
@@ -311,4 +311,17 @@ function isExplicitFinalFailure(receipt: unknown): boolean {
     return camel === 'FINISHED_WITH_ERROR' && snake === 'ERROR'
   }
   return camel === 'FINISHED_WITH_ERROR' || snake === 'ERROR'
+}
+
+function authoritativeLeaderExecution(
+  receipts: Array<{ mode?: string, execution_result?: string }> | undefined,
+): string | undefined {
+  if (!receipts || receipts.length === 0) return undefined
+  if (receipts.some((receipt) => receipt.mode !== undefined)) {
+    for (let index = receipts.length - 1; index >= 0; index -= 1) {
+      if (receipts[index].mode === 'leader') return receipts[index].execution_result
+    }
+    return undefined
+  }
+  return receipts.at(-1)?.execution_result
 }

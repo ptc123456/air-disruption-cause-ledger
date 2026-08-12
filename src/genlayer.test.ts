@@ -115,6 +115,13 @@ describe('finalized receipt validation', () => {
       status_name: 'FINALIZED', result_name: 'MAJORITY_AGREE',
       consensus_data: { leader_receipt: [{ execution_result: 'ERROR' }, { execution_result: 'SUCCESS' }] },
     },
+    {
+      status_name: 'FINALIZED', result_name: 'MAJORITY_AGREE',
+      consensus_data: { leader_receipt: [
+        { mode: 'leader', execution_result: 'SUCCESS' },
+        { mode: 'validator', execution_result: 'ERROR' },
+      ] },
+    },
   ])('accepts explicit SDK and Studionet finalized-success shapes', (receipt) => {
     expect(() => assertSuccessfulReceipt(receipt)).not.toThrow()
   })
