@@ -4,11 +4,10 @@ Air Disruption Cause Ledger is a non-economic GenLayer PROJECT that records evid
 
 ## Verified links
 
+- Live app: [air-disruption-cause-ledger.vercel.app](https://air-disruption-cause-ledger.vercel.app)
 - Studionet contract: [`0x999c74695d3f417f01b530d3DE51cC95CE847F7b`](https://explorer-studio.genlayer.com/address/0x999c74695d3f417f01b530d3DE51cC95CE847F7b)
 - Deployment transaction: [`0x0bbe13cd...fefb1fd`](https://explorer-studio.genlayer.com/tx/0x0bbe13cdac34e55fb1c3871d045fb1edb32b4b3fbfeb73b619bab32befefb1fd)
 - Deployment, lifecycle, and recovery evidence: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-
-The frontend has been verified locally against the release address. A public app URL is not claimed until a later, separately verified Vercel deployment.
 
 ## Trust problem
 
@@ -141,5 +140,5 @@ The storage field order `cases`, `case_ids`, `upgrader_address` must not change 
 - FAA NAS data describes system or airport conditions and may not identify the cause of one flight.
 - BTS/ASPM data may lag the flight date and may include carrier-reported categories.
 - A revision overwrites the current assessment while retaining a revision counter and URL; immutable assessment history is not stored.
-- The current frontend bundle carries a non-blocking size warning and has not yet been claimed at a public hosting URL.
+- The current frontend bundle carries a non-blocking size warning.
 - The pinned contract runner matches the verified deployment. A newer advertised runner is not adopted without separate compatibility review and live verification.

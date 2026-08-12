@@ -21,6 +21,19 @@ Status: `STUDIONET LIVE VERIFIED`
 
 The deployment reached `FINALIZED`, `MAJORITY_AGREE`, and authoritative leader `SUCCESS`. Live deployed-code bytes matched the recorded SHA-256, `get_upgrader` returned the constructor wallet, and the initial case list was empty.
 
+## Production frontend
+
+- Vercel team: `shingg`
+- Project: `air-disruption-cause-ledger`
+- Canonical URL: `https://air-disruption-cause-ledger.vercel.app`
+- Deployment ID: `dpl_5VY6Vjo3wuyhDaKL4RfBF7HxUP8o`
+- Target/status: `production` / `READY`
+- Production variable: `VITE_CONTRACT_ADDRESS = 0x999c74695d3f417f01b530d3DE51cC95CE847F7b`
+- Production JS: `assets/index-BZ4J7Jqe.js`
+- Production/local bundle SHA-256: `ec97d1bedc00a26ce4a24cc20a9695215fd1c3b0043d9493021995bcaaa7e8b9`
+
+The canonical URL returned HTTP 200, rendered the production UI, and loaded authoritative readback for `ADCL-LIVE-003` at `REVISED_ASSESSED`, revision `2`, outcome `INSUFFICIENT_EVIDENCE`. The remote JS bundle was byte-for-byte equal to the reviewed local production bundle, contained the release contract address, and did not contain the disposable rehearsal address.
+
 ## Live acceptance evidence
 
 - Register `ADCL-LIVE-003`: `0x35d11f9602561dbb33d28c9ef0e83d7967699050f0d5da2e062938640f4c11c9`
