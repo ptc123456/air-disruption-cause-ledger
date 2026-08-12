@@ -199,6 +199,40 @@ def test_web_render_failure_becomes_bounded_unavailable_evidence():
     assert contract._render_source(VALID_ARGS[6], "carrier") == "[SOURCE_UNAVAILABLE: carrier]"
 
 
+def test_assess_uses_structured_output_after_one_source_is_unavailable():
+    contract, _ = contract_instance()
+    prompts = []
+
+    def render(url, **_kwargs):
+        if url == VALID_ARGS[6]:
+            raise Exception("WEBPAGE_LOAD_FAILED")
+        return "available evidence"
+
+    def exec_prompt(prompt, **kwargs):
+        prompts.append(prompt)
+        assert kwargs == {"response_format": "json"}
+        return {
+            "outcome": "INSUFFICIENT_EVIDENCE",
+            "source_status": "carrier unavailable; FAA available; weather available; revision unavailable",
+            "explanation": "Carrier evidence was inaccessible, so the available sources cannot establish a supported signal.",
+        }
+
+    contract._test_gl.nondet = types.SimpleNamespace(
+        web=types.SimpleNamespace(render=render),
+        exec_prompt=exec_prompt,
+    )
+    contract._test_gl.eq_principle = types.SimpleNamespace(
+        prompt_comparative=lambda evaluate, **_kwargs: evaluate()
+    )
+    record = dict(zip(
+        ("case_id", "carrier", "flight_number", "flight_date", "origin", "destination", "carrier_url", "faa_url", "weather_url"),
+        VALID_ARGS,
+    ))
+    result = contract._assess(record, "PROVISIONAL", "")
+    assert result["outcome"] == "INSUFFICIENT_EVIDENCE"
+    assert "[SOURCE_UNAVAILABLE: carrier]" in prompts[0]
+
+
 def test_mixed_evidence_routes_to_assistance_review():
     contract, _ = contract_instance()
     contract.register_case(*VALID_ARGS)

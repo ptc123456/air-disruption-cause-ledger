@@ -196,7 +196,7 @@ BEGIN UNTRUSTED REVISION DATA
 {revision_text}
 END UNTRUSTED REVISION DATA
 """
-            result = json.loads(gl.nondet.exec_prompt(prompt))
+            result = gl.nondet.exec_prompt(prompt, response_format="json")
             outcome = str(result.get("outcome", ""))
             explanation = str(result.get("explanation", ""))[:600]
             source_status = str(result.get("source_status", ""))[:400]
