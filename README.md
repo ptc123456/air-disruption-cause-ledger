@@ -33,10 +33,10 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Copy `.env.example` to `.env` only after a real deployment exists, then set:
+Copy `.env.example` to `.env`, then set the verified Studionet release address:
 
 ```text
-VITE_CONTRACT_ADDRESS=<real Studionet address>
+VITE_CONTRACT_ADDRESS=0x999c74695d3f417f01b530d3DE51cC95CE847F7b
 ```
 
 Never place a placeholder address in `.env`.
@@ -60,8 +60,8 @@ FAA NAS data describes system and airport conditions and does not investigate th
 
 ## Release status
 
-Current stage: local implementation. No contract address, GitHub repository, or live deployment is claimed yet.
+Current stage: Studionet live verified. The release contract is `0x999c74695d3f417f01b530d3DE51cC95CE847F7b`; deployment and lifecycle evidence are recorded in `docs/DEPLOYMENT.md`.
 
-The deterministic pytest harness covers input and state transitions without pretending to simulate validators. Web/LLM consensus and validator disagreement remain mandatory Studionet evidence before deployment readiness.
+The deterministic pytest harness covers input and state transitions without pretending to simulate validators. Studionet evidence separately covers deployment, web/LLM consensus, full case lifecycle, a rollback/no-mutation control, and an isolated authorized/unauthorized upgrade rehearsal.
 
 The contract runner pin matches the current official FetchWebContent example. The linter may advertise a newer runner whose SDK artifact is not yet loadable by `genvm-linter 0.11.0`; that suggestion is not treated as a validated upgrade.
