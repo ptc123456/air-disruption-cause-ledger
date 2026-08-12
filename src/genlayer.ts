@@ -299,9 +299,14 @@ function isExplicitFinalFailure(receipt: unknown): boolean {
   const statuses = [value.statusName, value.status_name].filter((item): item is string => item !== undefined)
   if (statuses.length === 0 || statuses.some((status) => status !== 'FINALIZED')) return false
   const consensus = [value.resultName, value.result_name].filter((item): item is string => item !== undefined)
-  if (consensus.some((result) => result === 'MAJORITY_DISAGREE' || result === 'NO_MAJORITY')) return true
+  if (consensus.length > 1 && consensus.some((result) => result !== consensus[0])) return false
   const camel = value.txExecutionResultName
   const snake = value.consensus_data?.leader_receipt?.at(-1)?.execution_result
+  if (camel !== undefined && snake !== undefined
+    && !((camel === 'FINISHED_WITH_RETURN' && snake === 'SUCCESS')
+      || (camel === 'FINISHED_WITH_ERROR' && snake === 'ERROR'))) return false
+  if (consensus[0] === 'MAJORITY_DISAGREE' || consensus[0] === 'NO_MAJORITY') return true
+  if (consensus.length > 0 && consensus[0] !== 'MAJORITY_AGREE') return false
   if (camel !== undefined && snake !== undefined) {
     return camel === 'FINISHED_WITH_ERROR' && snake === 'ERROR'
   }

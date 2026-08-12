@@ -221,13 +221,21 @@ describe('pending transaction recovery', () => {
     expect(cleared).toBe(false)
   })
 
-  it('clears a proven finalized execution failure so a deliberate retry can occur', async () => {
+  it.each([
+    ['execution error', capturedFailedDeploymentShape],
+    ['majority disagree', {
+      statusName: 'FINALIZED', status_name: 'FINALIZED',
+      resultName: 'MAJORITY_DISAGREE', result_name: 'MAJORITY_DISAGREE',
+    }],
+    ['no majority', {
+      statusName: 'FINALIZED', status_name: 'FINALIZED',
+      resultName: 'NO_MAJORITY', result_name: 'NO_MAJORITY',
+    }],
+  ])('clears a proven finalized %s so a deliberate retry can occur', async (_label, receipt) => {
     let cleared = false
     await expect(reconcilePendingOperation(pending, SENDER, () => undefined, {
       getTransaction: async () => matchingTransaction(),
-      waitForFinalized: async () => ({
-        ...capturedFailedDeploymentShape,
-      }),
+      waitForFinalized: async () => receipt,
       readCase: async () => null,
       clear: () => { cleared = true },
     }, CONTRACT)).rejects.toThrow('successful leader execution')
@@ -242,6 +250,46 @@ describe('pending transaction recovery', () => {
         status_name: 'FINALIZED',
         result_name: 'MAJORITY_AGREE',
         consensus_data: { leader_receipt: [{ execution_result: 'idle' }] },
+      }),
+      readCase: async () => registeredCase,
+      clear: () => { cleared = true },
+    }, CONTRACT)).rejects.toThrow('successful leader execution')
+    expect(cleared).toBe(false)
+  })
+
+  it.each([
+    ['camel agree, snake disagree', 'MAJORITY_AGREE', 'MAJORITY_DISAGREE'],
+    ['camel disagree, snake agree', 'MAJORITY_DISAGREE', 'MAJORITY_AGREE'],
+  ])('retains and blocks replay for conflicting consensus: %s', async (_label, resultName, result_name) => {
+    const storage = memoryStorage()
+    savePendingOperation(pending, storage)
+    vi.stubGlobal('window', { localStorage: storage })
+    let cleared = false
+    await expect(reconcilePendingOperation(pending, SENDER, () => undefined, {
+      getTransaction: async () => matchingTransaction(),
+      waitForFinalized: async () => ({
+        statusName: 'FINALIZED', status_name: 'FINALIZED', resultName, result_name,
+        txExecutionResultName: 'FINISHED_WITH_ERROR',
+        consensus_data: { leader_receipt: [{ execution_result: 'ERROR' }] },
+      }),
+      readCase: async () => registeredCase,
+      clear: () => { cleared = true },
+    }, CONTRACT)).rejects.toThrow('successful leader execution')
+    expect(cleared).toBe(false)
+    expect(loadPendingOperation(storage)).toEqual(pending)
+    await expect(writeAndReadback(
+      { request: async () => undefined }, SENDER, 'register_case', ['CASE-1'], 'CASE-1', () => undefined,
+    )).rejects.toThrow('must be reconciled')
+  })
+
+  it('retains pending state when execution authorities conflict during consensus failure', async () => {
+    let cleared = false
+    await expect(reconcilePendingOperation(pending, SENDER, () => undefined, {
+      getTransaction: async () => matchingTransaction(),
+      waitForFinalized: async () => ({
+        statusName: 'FINALIZED', resultName: 'MAJORITY_DISAGREE',
+        txExecutionResultName: 'FINISHED_WITH_RETURN',
+        consensus_data: { leader_receipt: [{ execution_result: 'ERROR' }] },
       }),
       readCase: async () => registeredCase,
       clear: () => { cleared = true },
