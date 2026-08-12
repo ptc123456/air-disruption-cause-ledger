@@ -37,7 +37,7 @@ class AirDisruptionCauseLedger(gl.Contract):
 
     def __init__(self, upgrader_address: Address):
         upgrader = self._normalize_address(upgrader_address)
-        if upgrader == Address.ZERO:
+        if upgrader.as_bytes == bytes(20):
             raise gl.vm.UserError("Upgrader must be a non-zero external wallet")
         self.upgrader_address = upgrader
         root = gl.storage.Root.get()
@@ -136,6 +136,8 @@ class AirDisruptionCauseLedger(gl.Contract):
         return json.loads(raw)
 
     def _normalize_address(self, value) -> Address:
+        if isinstance(value, Address):
+            return value
         if isinstance(value, int) and not isinstance(value, bool):
             if value < 0 or value >= 1 << 160:
                 raise gl.vm.UserError("Upgrader address integer must fit in 160 bits")

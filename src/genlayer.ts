@@ -1,4 +1,4 @@
-import { createClient } from 'genlayer-js'
+import { abi, createClient } from 'genlayer-js'
 import { studionet } from 'genlayer-js/chains'
 import { TransactionStatus } from 'genlayer-js/types'
 import type { TransactionHash } from 'genlayer-js/types'
@@ -123,7 +123,7 @@ export async function writeAndReadback(
   }
   savePendingOperation(pending)
   onStatus('Submitted; waiting for FINALIZED', hash)
-  return reconcilePendingOperation(pending, onStatus)
+  return reconcilePendingOperation(pending, account, onStatus)
 }
 
 export function loadPendingOperation(storage: PendingStorage = window.localStorage): PendingOperation | null {
@@ -165,8 +165,10 @@ export function pendingMatchesContext(
 
 export async function reconcilePendingOperation(
   pending: PendingOperation,
+  account: HexAddress,
   onStatus: (status: string, hash?: string) => void,
   dependencies?: ReconcileDependencies,
+  activeContract: HexAddress = configuredContractAddress(),
 ): Promise<FlightCase> {
   const deps = dependencies || {
     getTransaction: (hash: TransactionHash) => readClient.getTransaction({ hash }),
@@ -179,8 +181,12 @@ export async function reconcilePendingOperation(
     readCase,
     clear: clearPendingOperation,
   }
+  if (!pendingMatchesContext(pending, account, activeContract)) {
+    throw new Error('Saved transaction does not match the active sender, contract, or Studionet context.')
+  }
   onStatus('Reconciling saved transaction', pending.hash)
-  await deps.getTransaction(pending.hash)
+  const transaction = await deps.getTransaction(pending.hash)
+  assertTransactionMatchesPending(transaction, pending)
   const receipt = await deps.waitForFinalized(pending.hash)
   try {
     assertSuccessfulReceipt(receipt)
@@ -191,9 +197,66 @@ export async function reconcilePendingOperation(
   onStatus('FINALIZED and execution successful; reading contract', pending.hash)
   const record = await deps.readCase(pending.caseId)
   if (!record) throw new Error('Transaction finalized, but authoritative contract readback is missing; reconciliation remains pending.')
+  assertReadbackMatchesPending(record, pending)
   deps.clear()
   onStatus('Readback confirmed', pending.hash)
   return record
+}
+
+export function assertTransactionMatchesPending(transaction: unknown, pending: PendingOperation): void {
+  if (!transaction || typeof transaction !== 'object') throw new Error('Transaction lookup returned no verifiable transaction.')
+  const value = transaction as Record<string, unknown>
+  requireMatchingFields(value, ['hash', 'tx_id', 'txId'], pending.hash, 'transaction hash')
+  requireMatchingFields(value, ['from_address', 'origin_address', 'sender'], pending.sender, 'transaction sender')
+  requireMatchingFields(value, ['recipient', 'to_address'], pending.contract, 'transaction contract')
+  if (value.chainId !== undefined && Number(value.chainId) !== pending.chainId) {
+    throw new Error('Transaction chain does not match the saved operation.')
+  }
+  const data = value.data as { calldata?: { raw?: unknown } } | undefined
+  const raw = data?.calldata?.raw
+  const expected = Array.from(abi.calldata.encode(abi.calldata.makeCalldataObject(pending.functionName, pending.args, undefined)))
+  if (!Array.isArray(raw) || raw.length !== expected.length || raw.some((byte, index) => byte !== expected[index])) {
+    throw new Error('Transaction method or arguments do not match the saved operation.')
+  }
+}
+
+function requireMatchingFields(value: Record<string, unknown>, names: string[], expected: string, label: string): void {
+  const fields = names.map((name) => value[name]).filter((item): item is string => typeof item === 'string')
+  if (fields.length === 0 || fields.some((item) => item.toLowerCase() !== expected.toLowerCase())) {
+    throw new Error(`Returned ${label} does not match the saved operation.`)
+  }
+}
+
+export function assertReadbackMatchesPending(record: FlightCase, pending: PendingOperation): void {
+  if (record.case_id !== pending.caseId) throw new Error('Readback case identity does not match the saved operation.')
+  if (pending.functionName === 'register_case') {
+    const [caseId, carrier, flightNumber, flightDate, origin, destination, carrierUrl, faaUrl, weatherUrl] = pending.args
+    if (pending.args.length !== 9 || record.case_id !== caseId || record.carrier !== carrier
+      || record.flight_number !== flightNumber || record.flight_date !== flightDate || record.origin !== origin
+      || record.destination !== destination || record.carrier_url !== carrierUrl || record.faa_url !== faaUrl
+      || record.weather_url !== weatherUrl || record.submitter.toLowerCase() !== pending.sender.toLowerCase()
+      || !['REGISTERED', 'PROVISIONAL_ASSESSED', 'REVISED_ASSESSED'].includes(record.stage)) {
+      throw new Error('Registration readback does not match the submitted immutable fields.')
+    }
+    return
+  }
+  if (pending.functionName === 'assess_provisional') {
+    if (pending.args.length !== 1 || pending.args[0] !== pending.caseId
+      || !['PROVISIONAL_ASSESSED', 'REVISED_ASSESSED'].includes(record.stage)
+      || record.revision < 1 || record.outcome === '' || record.source_status === '') {
+      throw new Error('Provisional assessment readback does not confirm the submitted state effect.')
+    }
+    return
+  }
+  if (pending.functionName === 'assess_revision') {
+    if (pending.args.length !== 2 || pending.args[0] !== pending.caseId || record.stage !== 'REVISED_ASSESSED'
+      || record.revision !== 2 || record.revision_url !== pending.args[1]
+      || record.outcome === '' || record.source_status === '') {
+      throw new Error('Revision readback does not confirm the submitted state effect.')
+    }
+    return
+  }
+  throw new Error('Saved operation contains an unsupported contract method.')
 }
 
 export function assertSuccessfulReceipt(receipt: unknown): void {
@@ -206,13 +269,19 @@ export function assertSuccessfulReceipt(receipt: unknown): void {
     txExecutionResultName?: string
     consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
   }
-  if ((value.statusName ?? value.status_name) !== 'FINALIZED') {
+  const statuses = [value.statusName, value.status_name].filter((item): item is string => item !== undefined)
+  if (statuses.length === 0 || statuses.some((status) => status !== 'FINALIZED')) {
     throw new Error('Receipt does not confirm FINALIZED status.')
   }
-  const consensus = value.resultName ?? value.result_name
-  const leaderSucceeded = value.txExecutionResultName === 'FINISHED_WITH_RETURN'
-    || value.consensus_data?.leader_receipt?.some((entry) => entry.execution_result === 'SUCCESS') === true
-  if (consensus !== 'MAJORITY_AGREE' || !leaderSucceeded) {
+  const consensus = [value.resultName, value.result_name].filter((item): item is string => item !== undefined)
+  const leaderReceipts = value.consensus_data?.leader_receipt
+  const executionChecks: boolean[] = []
+  if (value.txExecutionResultName !== undefined) executionChecks.push(value.txExecutionResultName === 'FINISHED_WITH_RETURN')
+  if (leaderReceipts !== undefined) {
+    executionChecks.push(leaderReceipts.length > 0 && leaderReceipts.at(-1)?.execution_result === 'SUCCESS')
+  }
+  if (consensus.length === 0 || consensus.some((result) => result !== 'MAJORITY_AGREE')
+    || executionChecks.length === 0 || executionChecks.some((success) => !success)) {
     throw new Error('Finalized transaction did not confirm successful leader execution.')
   }
 }
@@ -227,11 +296,14 @@ function isExplicitFinalFailure(receipt: unknown): boolean {
     txExecutionResultName?: string
     consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
   }
-  if ((value.statusName ?? value.status_name) !== 'FINALIZED') return false
-  const consensus = value.resultName ?? value.result_name
-  const executions = value.consensus_data?.leader_receipt?.map((entry) => entry.execution_result) ?? []
-  return consensus === 'MAJORITY_DISAGREE'
-    || consensus === 'NO_MAJORITY'
-    || value.txExecutionResultName === 'FINISHED_WITH_ERROR'
-    || (executions.length > 0 && executions.every((result) => result === 'ERROR' || result === 'idle'))
+  const statuses = [value.statusName, value.status_name].filter((item): item is string => item !== undefined)
+  if (statuses.length === 0 || statuses.some((status) => status !== 'FINALIZED')) return false
+  const consensus = [value.resultName, value.result_name].filter((item): item is string => item !== undefined)
+  if (consensus.some((result) => result === 'MAJORITY_DISAGREE' || result === 'NO_MAJORITY')) return true
+  const camel = value.txExecutionResultName
+  const snake = value.consensus_data?.leader_receipt?.at(-1)?.execution_result
+  if (camel !== undefined && snake !== undefined) {
+    return camel === 'FINISHED_WITH_ERROR' && snake === 'ERROR'
+  }
+  return camel === 'FINISHED_WITH_ERROR' || snake === 'ERROR'
 }

@@ -20,6 +20,11 @@ function field(form: FormData, name: string): string {
   return String(form.get(name) || '').trim()
 }
 
+function canResumePending(operation: PendingOperation | null, account: HexAddress | null): boolean {
+  if (!operation || !account) return false
+  try { return pendingMatchesContext(operation, account) } catch { return false }
+}
+
 export default function App() {
   const [wallets, setWallets] = useState<WalletOption[]>([])
   const [wallet, setWallet] = useState<WalletOption | null>(null)
@@ -129,11 +134,15 @@ export default function App() {
 
   async function resumePending(operation: PendingOperation) {
     if (reconciling.current) return
+    if (!account) {
+      setError('Connect the exact sender wallet before resuming this transaction.')
+      return
+    }
     reconciling.current = true
     setBusy(true)
     setError('')
     try {
-      const record = await reconcilePendingOperation(operation, (next, hash) => {
+      const record = await reconcilePendingOperation(operation, account, (next, hash) => {
         setStatus(next)
         if (hash) setTxHash(hash)
       })
@@ -233,7 +242,8 @@ export default function App() {
           <div className="transaction-strip" role="status" aria-live="polite">
             <span className={error ? 'signal error' : busy ? 'signal busy' : 'signal'} aria-hidden="true" />
             <div><strong>{status}</strong>{txHash && <code>{txHash}</code>}</div>
-            {pending && !busy && <button type="button" onClick={() => void resumePending(pending)}>Resume pending</button>}
+            {pending && !busy && canResumePending(pending, account)
+              && <button type="button" onClick={() => void resumePending(pending)}>Resume pending</button>}
           </div>
           {error && <p className="error-message" role="alert">{error}</p>}
 

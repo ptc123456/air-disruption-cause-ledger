@@ -19,7 +19,7 @@ VALID_ARGS = (
 )
 
 
-def contract_instance(upgrader_value=None):
+def contract_instance(upgrader_value=None, use_existing_address=False):
     """Load deterministic methods only; GenVM validation is run separately."""
     module = types.ModuleType("genlayer")
 
@@ -45,9 +45,7 @@ def contract_instance(upgrader_value=None):
 
     class Address:
         def __init__(self, value):
-            if isinstance(value, Address):
-                self.value = value.value
-            elif isinstance(value, str) and value.startswith("0x") and len(value) == 42:
+            if isinstance(value, str) and value.startswith("0x") and len(value) == 42:
                 self.value = bytes.fromhex(value[2:])
             elif isinstance(value, (bytes, bytearray)) and len(value) == 20:
                 self.value = bytes(value)
@@ -63,7 +61,9 @@ def contract_instance(upgrader_value=None):
         def __hash__(self):
             return hash(self.value)
 
-    Address.ZERO = Address(bytes(20))
+        @property
+        def as_bytes(self):
+            return self.value
 
     class Slot:
         def __init__(self, value):
@@ -99,6 +99,8 @@ def contract_instance(upgrader_value=None):
         else:
             sys.modules["genlayer"] = previous
     upgrader = "0x2222222222222222222222222222222222222222" if upgrader_value is None else upgrader_value
+    if use_existing_address:
+        upgrader = Address(upgrader)
     contract = contract_class(upgrader)
     contract.cases = {}
     contract.case_ids = []
@@ -120,6 +122,11 @@ def test_constructor_normalizes_the_exact_studio_integer_calldata_shape():
     contract, _ = contract_instance(studio_value)
     assert str(contract.get_upgrader()) == expected
     assert [str(value) for value in contract._test_upgraders] == [expected]
+
+
+def test_constructor_preserves_an_existing_runtime_address():
+    contract, _ = contract_instance(use_existing_address=True)
+    assert str(contract.get_upgrader()) == "0x2222222222222222222222222222222222222222"
 
 
 @pytest.mark.parametrize("value", [-1, 1 << 160])
