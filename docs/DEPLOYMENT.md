@@ -48,6 +48,8 @@ Never reorder, remove or change the types of these fields: `cases`, `case_ids`, 
 
 If Studio/local UI state is reset while chain state remains, reconnect the recorded upgrader wallet, import the contract by its recorded address, load the exact source revision, verify code parity and only then perform any upgrade.
 
+If the recorded Studio deployer/upgrader account becomes unavailable, the existing contract may remain readable but its old upgrade authority cannot be recovered or replaced through that lost account. Deploy a replacement from the recorded source and constructor manifest, restore every configuration and link, repeat the full live test suite, then update the frontend and all documentation references. Do not claim that the original contract remains recoverably upgradable.
+
 If Studionet chain state is reset, the address and state cannot be recovered. Redeploy the recorded source with the same upgrader choice, repeat all live tests, update the frontend address and replace every deployment reference.
 
 The isolated rehearsal above proves both authorized replacement and unauthorized rejection without mutating the release deployment.

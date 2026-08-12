@@ -16,7 +16,7 @@ Outcomes are `CARRIER_REPORTED`, `NAS_CORROBORATED`, `WEATHER_CORROBORATED`, `MI
 
 There is no backend or database. Reads come from the contract. Writes wait for `FINALIZED`, require successful execution, and then perform authoritative readback.
 
-The contract is classified `UPGRADABLE`. Deployment requires an explicit non-zero, user-controlled external wallet constructor argument. Root Slot code replacement remains protected by GenVM's upgrader authorization; the storage field order must remain unchanged across upgrades.
+The contract is classified `UPGRADABLE`. Deployment requires the explicit non-zero address of the selected and recorded Studio deployer/upgrader account. Root Slot code replacement remains protected by GenVM's upgrader authorization; the storage field order must remain unchanged across upgrades. If access to that recorded account is lost, its authority cannot be recovered; follow the replacement-deployment procedure in `docs/DEPLOYMENT.md`.
 
 ## Local setup
 
