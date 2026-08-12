@@ -200,20 +200,38 @@ export function assertSuccessfulReceipt(receipt: unknown): void {
   if (!receipt || typeof receipt !== 'object') throw new Error('Missing finalized receipt.')
   const value = receipt as {
     statusName?: string
+    status_name?: string
     resultName?: string
+    result_name?: string
     txExecutionResultName?: string
+    consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
   }
-  if (value.statusName !== 'FINALIZED') {
+  if ((value.statusName ?? value.status_name) !== 'FINALIZED') {
     throw new Error('Receipt does not confirm FINALIZED status.')
   }
-  if (value.resultName !== 'SUCCESS' || value.txExecutionResultName !== 'FINISHED_WITH_RETURN') {
+  const consensus = value.resultName ?? value.result_name
+  const leaderSucceeded = value.txExecutionResultName === 'FINISHED_WITH_RETURN'
+    || value.consensus_data?.leader_receipt?.some((entry) => entry.execution_result === 'SUCCESS') === true
+  if (consensus !== 'MAJORITY_AGREE' || !leaderSucceeded) {
     throw new Error('Finalized transaction did not confirm successful leader execution.')
   }
 }
 
 function isExplicitFinalFailure(receipt: unknown): boolean {
   if (!receipt || typeof receipt !== 'object') return false
-  const value = receipt as { statusName?: string; resultName?: string; txExecutionResultName?: string }
-  return value.statusName === 'FINALIZED'
-    && (value.resultName === 'FAILURE' || value.txExecutionResultName === 'FINISHED_WITH_ERROR')
+  const value = receipt as {
+    statusName?: string
+    status_name?: string
+    resultName?: string
+    result_name?: string
+    txExecutionResultName?: string
+    consensus_data?: { leader_receipt?: Array<{ execution_result?: string }> }
+  }
+  if ((value.statusName ?? value.status_name) !== 'FINALIZED') return false
+  const consensus = value.resultName ?? value.result_name
+  const executions = value.consensus_data?.leader_receipt?.map((entry) => entry.execution_result) ?? []
+  return consensus === 'MAJORITY_DISAGREE'
+    || consensus === 'NO_MAJORITY'
+    || value.txExecutionResultName === 'FINISHED_WITH_ERROR'
+    || (executions.length > 0 && executions.every((result) => result === 'ERROR' || result === 'idle'))
 }

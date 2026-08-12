@@ -36,11 +36,12 @@ class AirDisruptionCauseLedger(gl.Contract):
     upgrader_address: Address
 
     def __init__(self, upgrader_address: Address):
-        if str(upgrader_address) == "0x0000000000000000000000000000000000000000":
+        upgrader = self._normalize_address(upgrader_address)
+        if upgrader == Address.ZERO:
             raise gl.vm.UserError("Upgrader must be a non-zero external wallet")
-        self.upgrader_address = upgrader_address
+        self.upgrader_address = upgrader
         root = gl.storage.Root.get()
-        root.upgraders.get().append(upgrader_address)
+        root.upgraders.get().append(upgrader)
 
     @gl.public.write
     def register_case(
@@ -133,6 +134,16 @@ class AirDisruptionCauseLedger(gl.Contract):
         if raw == "":
             raise gl.vm.UserError("Case not found")
         return json.loads(raw)
+
+    def _normalize_address(self, value) -> Address:
+        if isinstance(value, int) and not isinstance(value, bool):
+            if value < 0 or value >= 1 << 160:
+                raise gl.vm.UserError("Upgrader address integer must fit in 160 bits")
+            value = value.to_bytes(20, "big")
+        try:
+            return Address(value)
+        except Exception:
+            raise gl.vm.UserError("Upgrader address encoding is invalid")
 
     def _assess(self, record: dict, phase: str, revision_url: str) -> dict:
         carrier_url = record["carrier_url"]

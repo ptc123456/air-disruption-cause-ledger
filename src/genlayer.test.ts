@@ -34,8 +34,25 @@ function memoryStorage() {
 
 const finalizedSuccess = {
   statusName: 'FINALIZED',
-  resultName: 'SUCCESS',
+  resultName: 'MAJORITY_AGREE',
   txExecutionResultName: 'FINISHED_WITH_RETURN',
+}
+
+const studionetSuccessShape = {
+  status_name: 'FINALIZED',
+  result_name: 'MAJORITY_AGREE',
+  consensus_data: { leader_receipt: [{ execution_result: 'SUCCESS' }] },
+}
+
+const capturedFailedDeploymentShape = {
+  status_name: 'FINALIZED',
+  result_name: 'MAJORITY_AGREE',
+  consensus_data: {
+    leader_receipt: [
+      { execution_result: 'ERROR' },
+      { execution_result: 'ERROR' },
+    ],
+  },
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -44,15 +61,17 @@ describe('finalized receipt validation', () => {
   it.each([
     finalizedSuccess,
     { ...finalizedSuccess, consensus_data: { final: true } },
-  ])('accepts an explicit documented finalized-success shape', (receipt) => {
+    studionetSuccessShape,
+  ])('accepts explicit SDK and Studionet finalized-success shapes', (receipt) => {
     expect(() => assertSuccessfulReceipt(receipt)).not.toThrow()
   })
 
   it.each([
-    { statusName: 'ACCEPTED', consensus_data: { final: true }, resultName: 'SUCCESS', txExecutionResultName: 'FINISHED_WITH_RETURN' },
-    { resultName: 'SUCCESS', txExecutionResultName: 'FINISHED_WITH_RETURN' },
-    { statusName: 'FINALIZED', resultName: 'FAILURE', txExecutionResultName: 'FINISHED_WITH_ERROR' },
-    { statusName: 'FINALIZED', resultName: 'SUCCESS' },
+    { statusName: 'ACCEPTED', resultName: 'MAJORITY_AGREE', txExecutionResultName: 'FINISHED_WITH_RETURN' },
+    { resultName: 'MAJORITY_AGREE', txExecutionResultName: 'FINISHED_WITH_RETURN' },
+    { statusName: 'FINALIZED', resultName: 'MAJORITY_DISAGREE', txExecutionResultName: 'FINISHED_WITH_ERROR' },
+    { statusName: 'FINALIZED', resultName: 'MAJORITY_AGREE' },
+    capturedFailedDeploymentShape,
     {},
     null,
   ])('fails closed for accepted, missing, failed, or incomplete receipts', (receipt) => {
@@ -103,9 +122,7 @@ describe('pending transaction recovery', () => {
     await expect(reconcilePendingOperation(pending, () => undefined, {
       getTransaction: async () => ({ statusName: 'FINALIZED' }),
       waitForFinalized: async () => ({
-        statusName: 'FINALIZED',
-        resultName: 'FAILURE',
-        txExecutionResultName: 'FINISHED_WITH_ERROR',
+        ...capturedFailedDeploymentShape,
       }),
       readCase: async () => null,
       clear: () => { cleared = true },
