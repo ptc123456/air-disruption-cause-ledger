@@ -90,6 +90,34 @@ export async function readCase(caseId: string): Promise<FlightCase | null> {
   return JSON.parse(result) as FlightCase
 }
 
+export function validateDisruptionWindow(
+  windowStart: string,
+  windowEnd: string,
+  flightDate: string,
+): string | null {
+  if (!windowStart || !windowEnd) {
+    return 'Window start and window end are required.'
+  }
+  const utcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/
+  if (!utcPattern.test(windowStart) || !utcPattern.test(windowEnd)) {
+    return 'Disruption window values must use exact UTC format YYYY-MM-DDTHH:MMZ.'
+  }
+  if (!windowStart.startsWith(flightDate + 'T') || !windowEnd.startsWith(flightDate + 'T')) {
+    return 'Disruption window start and end must belong to the registered flight date.'
+  }
+  const startHour = parseInt(windowStart.slice(11, 13), 10)
+  const startMin = parseInt(windowStart.slice(14, 16), 10)
+  const endHour = parseInt(windowEnd.slice(11, 13), 10)
+  const endMin = parseInt(windowEnd.slice(14, 16), 10)
+  if (startHour > 23 || startMin > 59 || endHour > 23 || endMin > 59) {
+    return 'Disruption window contains invalid time components.'
+  }
+  if (windowStart >= windowEnd) {
+    return 'Window start must be strictly before window end.'
+  }
+  return null
+}
+
 export async function writeAndReadback(
   provider: EthereumProvider,
   account: HexAddress,
@@ -227,13 +255,39 @@ function requireMatchingFields(value: Record<string, unknown>, names: string[], 
   }
 }
 
+function assertAssessmentProvenance(record: FlightCase, expectedCategories: string[]): void {
+  const mappings = [record.source_bindings, record.evidence_digests, record.grounded_excerpts]
+  if (mappings.some((mapping) => !mapping || typeof mapping !== 'object' || Array.isArray(mapping))) {
+    throw new Error('Assessment readback has invalid provenance mappings.')
+  }
+  const [bindings, digests, excerpts] = mappings as [Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]
+  for (const mapping of mappings as Record<string, unknown>[]) {
+    const keys = Object.keys(mapping).sort()
+    if (keys.length !== expectedCategories.length || keys.some((key, index) => key !== [...expectedCategories].sort()[index])) {
+      throw new Error('Assessment readback provenance categories do not match the submitted method.')
+    }
+  }
+  for (const category of expectedCategories) {
+    const binding = bindings[category]
+    const digest = digests[category]
+    const excerpt = excerpts[category]
+    if (!['BOUND', 'UNBOUND', 'UNAVAILABLE'].includes(binding as string)
+      || typeof digest !== 'string' || !/^[0-9a-f]{64}$/.test(digest)
+      || typeof excerpt !== 'string'
+      || (binding === 'BOUND' ? excerpt.length === 0 || excerpt.length > 600 : excerpt !== '')) {
+      throw new Error(`Assessment readback has invalid provenance for ${category}.`)
+    }
+  }
+}
+
 export function assertReadbackMatchesPending(record: FlightCase, pending: PendingOperation): void {
   if (record.case_id !== pending.caseId) throw new Error('Readback case identity does not match the saved operation.')
   if (pending.functionName === 'register_case') {
-    const [caseId, carrier, flightNumber, flightDate, origin, destination, carrierUrl, faaUrl, weatherUrl] = pending.args
-    if (pending.args.length !== 9 || record.case_id !== caseId || record.carrier !== carrier
+    const [caseId, carrier, flightNumber, flightDate, origin, destination, windowStartUtc, windowEndUtc, carrierUrl, faaUrl, weatherUrl] = pending.args
+    if (pending.args.length !== 11 || record.case_id !== caseId || record.carrier !== carrier
       || record.flight_number !== flightNumber || record.flight_date !== flightDate || record.origin !== origin
-      || record.destination !== destination || record.carrier_url !== carrierUrl || record.faa_url !== faaUrl
+      || record.destination !== destination || record.window_start_utc !== windowStartUtc || record.window_end_utc !== windowEndUtc
+      || record.carrier_url !== carrierUrl || record.faa_url !== faaUrl
       || record.weather_url !== weatherUrl || record.submitter.toLowerCase() !== pending.sender.toLowerCase()
       || !['REGISTERED', 'PROVISIONAL_ASSESSED', 'REVISED_ASSESSED'].includes(record.stage)) {
       throw new Error('Registration readback does not match the submitted immutable fields.')
@@ -246,6 +300,7 @@ export function assertReadbackMatchesPending(record: FlightCase, pending: Pendin
       || record.revision < 1 || record.outcome === '' || record.source_status === '') {
       throw new Error('Provisional assessment readback does not confirm the submitted state effect.')
     }
+    assertAssessmentProvenance(record, ['carrier', 'faa', 'weather'])
     return
   }
   if (pending.functionName === 'assess_revision') {
@@ -254,6 +309,7 @@ export function assertReadbackMatchesPending(record: FlightCase, pending: Pendin
       || record.outcome === '' || record.source_status === '') {
       throw new Error('Revision readback does not confirm the submitted state effect.')
     }
+    assertAssessmentProvenance(record, ['carrier', 'faa', 'weather', 'revision'])
     return
   }
   throw new Error('Saved operation contains an unsupported contract method.')

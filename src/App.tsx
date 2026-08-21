@@ -6,6 +6,7 @@ import {
   readCase,
   reconcilePendingOperation,
   requestWallet,
+  validateDisruptionWindow,
   writeAndReadback,
 } from './genlayer'
 import type { PendingOperation } from './genlayer'
@@ -13,6 +14,7 @@ import type { FlightCase, HexAddress, WalletOption } from './types'
 
 const EMPTY = {
   caseId: '', carrier: '', flightNumber: '', flightDate: '', origin: '', destination: '',
+  windowStartUtc: '', windowEndUtc: '',
   carrierUrl: '', faaUrl: 'https://nasstatus.faa.gov/', weatherUrl: 'https://api.weather.gov/',
 }
 
@@ -163,16 +165,36 @@ export default function App() {
     event.preventDefault()
     const data = new FormData(event.currentTarget)
     const id = field(data, 'caseId').toUpperCase()
+    const carrier = field(data, 'carrier').toUpperCase()
+    const flightNumber = field(data, 'flightNumber').toUpperCase()
+    const flightDate = field(data, 'flightDate')
+    const origin = field(data, 'origin').toUpperCase()
+    const destination = field(data, 'destination').toUpperCase()
+    const windowStartUtc = field(data, 'windowStartUtc')
+    const windowEndUtc = field(data, 'windowEndUtc')
+    const carrierUrl = field(data, 'carrierUrl')
+    const faaUrl = field(data, 'faaUrl')
+    const weatherUrl = field(data, 'weatherUrl')
+
+    const validationError = validateDisruptionWindow(windowStartUtc, windowEndUtc, flightDate)
+    if (validationError) {
+      setError(validationError)
+      setStatus('Validation error: ' + validationError)
+      return
+    }
+
     void write('register_case', [
       id,
-      field(data, 'carrier').toUpperCase(),
-      field(data, 'flightNumber').toUpperCase(),
-      field(data, 'flightDate'),
-      field(data, 'origin').toUpperCase(),
-      field(data, 'destination').toUpperCase(),
-      field(data, 'carrierUrl'),
-      field(data, 'faaUrl'),
-      field(data, 'weatherUrl'),
+      carrier,
+      flightNumber,
+      flightDate,
+      origin,
+      destination,
+      windowStartUtc,
+      windowEndUtc,
+      carrierUrl,
+      faaUrl,
+      weatherUrl,
     ], id)
   }
 
@@ -202,7 +224,7 @@ export default function App() {
         <section className="intro" aria-labelledby="title">
           <p className="system-line">Evidence signal—not legal liability, compensation, or an official cause.</p>
           <h1 id="title">Trace what disrupted the flight.</h1>
-          <p>Freeze a flight identity, compare carrier claims with FAA and weather evidence, and retain the current assessment with its revision marker on GenLayer.</p>
+          <p>Freeze a flight identity and disruption window, bind carrier claims with FAA and weather evidence, and retain digest-bound provenance on GenLayer.</p>
         </section>
 
         <section className="workbench" id="register" aria-labelledby="register-title">
@@ -217,6 +239,8 @@ export default function App() {
             <Input name="flightDate" label="Flight date" type="date" required />
             <Input name="origin" label="Origin IATA" placeholder="ATL" required maxLength={3} />
             <Input name="destination" label="Destination IATA" placeholder="LAX" required maxLength={3} />
+            <Input name="windowStartUtc" label="Window start (UTC: YYYY-MM-DDTHH:MMZ)" placeholder="2026-08-11T14:00Z" required />
+            <Input name="windowEndUtc" label="Window end (UTC: YYYY-MM-DDTHH:MMZ)" placeholder="2026-08-11T18:00Z" required />
             <Input name="carrierUrl" label="Official carrier flight-status URL" placeholder="https://www.delta.com/flight-status/search" type="url" required wide />
             <Input name="faaUrl" label="FAA NAS evidence URL" defaultValue={EMPTY.faaUrl} type="url" required wide />
             <Input name="weatherUrl" label="NWS evidence URL" defaultValue={EMPTY.weatherUrl} type="url" required wide />
@@ -253,7 +277,7 @@ export default function App() {
         </section>
       </main>
 
-      <footer><p>Evidence can corroborate a signal. It cannot turn uncertainty into fact.</p><span>Air Disruption Cause Ledger · Studionet</span></footer>
+      <footer><p>Evidence can corroborate a signal. Hostname allowlisting is only a first guard; bound content and grounded excerpts determine evidence validity.</p><span>Air Disruption Cause Ledger · Studionet</span></footer>
 
       <dialog ref={walletDialog} className="wallet-dialog" onClick={(event) => { if (event.target === walletDialog.current) walletDialog.current.close() }}>
         <h2>Choose a wallet</h2>
@@ -273,13 +297,67 @@ function Input({ name, label, wide = false, ...props }: { name: string; label: s
 }
 
 function CasePanel({ record, busy, assess, revise }: { record: FlightCase; busy: boolean; assess: () => void; revise: (event: FormEvent<HTMLFormElement>) => void }) {
+  const sources: Array<[string, string, string]> = [
+    ['Carrier', record.carrier_url, 'carrier'],
+    ['FAA / NAS', record.faa_url, 'faa'],
+    ['Weather', record.weather_url, 'weather'],
+  ]
+  if (record.revision_url) {
+    sources.push(['Revision', record.revision_url, 'revision'])
+  }
+
+  const hasDigests = record.evidence_digests && Object.keys(record.evidence_digests).length > 0
+  const isHistoricalWithoutEvidence = record.stage !== 'REGISTERED' && !hasDigests
+
   return <article className="case-panel">
-    <div className="flight-identity"><div><span>{record.carrier}</span><strong>{record.flight_number}</strong></div><p><b>{record.origin}</b><i aria-hidden="true">→</i><b>{record.destination}</b></p><time>{record.flight_date}</time></div>
-    <dl className="case-meta"><div><dt>Stage</dt><dd>{record.stage}</dd></div><div><dt>Revision</dt><dd>{record.revision}</dd></div><div><dt>Review route</dt><dd>{record.assistance_review_required ? 'REQUIRED' : 'NOT FLAGGED'}</dd></div></dl>
-    {record.outcome && <section className="verdict"><span>CONSENSUS SIGNAL</span><h3>{record.outcome.replaceAll('_', ' ')}</h3><p>{record.explanation}</p><small>{record.source_status}</small></section>}
+    <div className="flight-identity">
+      <div><span>{record.carrier}</span><strong>{record.flight_number}</strong></div>
+      <p><b>{record.origin}</b><i aria-hidden="true">→</i><b>{record.destination}</b></p>
+      <time>{record.flight_date}</time>
+      {record.window_start_utc && record.window_end_utc && (
+        <span className="window-badge">{record.window_start_utc} → {record.window_end_utc}</span>
+      )}
+    </div>
+    <dl className="case-meta">
+      <div><dt>Stage</dt><dd>{record.stage}</dd></div>
+      <div><dt>Revision</dt><dd>{record.revision}</dd></div>
+      <div><dt>Review route</dt><dd>{record.assistance_review_required ? 'REQUIRED' : 'NOT FLAGGED'}</dd></div>
+    </dl>
+    {record.outcome && (
+      <section className="verdict">
+        <span>CONSENSUS SIGNAL</span>
+        <h3>{record.outcome.replaceAll('_', ' ')}</h3>
+        <p>{record.explanation}</p>
+        <small>{record.source_status}</small>
+      </section>
+    )}
     <div className="source-ledger">
-      <h3>Frozen evidence endpoints</h3>
-      {[['Carrier', record.carrier_url], ['FAA / NAS', record.faa_url], ['Weather', record.weather_url], ...(record.revision_url ? [['Revision', record.revision_url]] : [])].map(([label, url]) => <a key={label} href={url} target="_blank" rel="noreferrer"><span>{label}</span><code>{url}</code></a>)}
+      <h3>Frozen evidence endpoints & provenance</h3>
+      {sources.map(([label, url, key]) => {
+        const binding = record.source_bindings?.[key]
+        const digest = record.evidence_digests?.[key]
+        const excerpt = record.grounded_excerpts?.[key]
+        return (
+          <div key={label} className="source-entry">
+            <a href={url} target="_blank" rel="noreferrer">
+              <span>{label}</span>
+              <code>{url}</code>
+            </a>
+            {binding && (
+              <div className="provenance-detail">
+                <span className={`binding-pill binding-${binding.toLowerCase()}`}>Binding: {binding}</span>
+                {digest && <span className="digest-display">SHA-256: <code>{digest}</code></span>}
+                {excerpt && <blockquote className="grounded-quote">{excerpt}</blockquote>}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {isHistoricalWithoutEvidence && (
+        <p className="historical-provenance-notice">
+          Cryptographic evidence identity was not recorded for this historical assessment.
+        </p>
+      )}
     </div>
     {record.stage === 'REGISTERED' && <button type="button" className="primary-action" onClick={assess} disabled={busy}>{busy ? 'Assessing…' : 'Run provisional assessment'}</button>}
     {record.stage === 'PROVISIONAL_ASSESSED' && <form className="revision-form" onSubmit={revise}><Input name="revisionUrl" label="BTS TranStats or FAA ASPM revision URL" type="url" required wide /><button className="primary-action" type="submit" disabled={busy}>{busy ? 'Assessing…' : 'Assess revision'}</button></form>}

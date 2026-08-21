@@ -13,6 +13,8 @@ export interface WalletOption {
   provider: EthereumProvider
 }
 
+export type SourceBindingStatus = 'BOUND' | 'UNBOUND' | 'UNAVAILABLE'
+
 export interface FlightCase {
   case_id: string
   submitter: string
@@ -21,6 +23,8 @@ export interface FlightCase {
   flight_date: string
   origin: string
   destination: string
+  window_start_utc?: string
+  window_end_utc?: string
   carrier_url: string
   faa_url: string
   weather_url: string
@@ -29,6 +33,9 @@ export interface FlightCase {
   outcome: string
   explanation: string
   source_status: string
+  source_bindings?: Record<string, SourceBindingStatus>
+  evidence_digests?: Record<string, string>
+  grounded_excerpts?: Record<string, string>
   assistance_review_required: boolean
   revision: number
 }
