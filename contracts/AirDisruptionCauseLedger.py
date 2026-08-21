@@ -335,11 +335,14 @@ END UNTRUSTED REVISION DATA
         return gl.eq_principle.prompt_comparative(
             evaluate,
             principle=(
-                "The outcome field must match exactly. The source_bindings must match exactly for all categories. "
+                "The outcome field must match exactly. The exact set of BOUND source categories must match. "
+                "UNBOUND and UNAVAILABLE are both non-authorizing states and may differ when a live page renders "
+                "for one validator but is unavailable to another. Neither state may influence a corroborating outcome. "
                 "Each validator must independently validate and digest its own rendered source snapshot. Live page "
                 "bytes may legitimately differ between validators, so evidence_digests and verbatim excerpts do not "
                 "need to match byte-for-byte across validators. "
-                "The source_status must agree on which source categories were available and materially relevant. "
+                "The source_status may differ on non-authorizing availability but must agree on materially relevant "
+                "BOUND categories. "
                 "Grounded excerpts must independently preserve the same flight, date, route, window, and cause facts. "
                 "Explanations may differ in wording "
                 "only when they preserve the same evidence limits."

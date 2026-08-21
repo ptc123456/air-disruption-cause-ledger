@@ -463,7 +463,7 @@ def test_changing_one_byte_changes_digest():
     assert digest_a != digest_b
 
 
-def test_consensus_criteria_allow_live_digest_variance_but_require_binding_agreement():
+def test_consensus_criteria_allow_non_authorizing_availability_and_digest_variance():
     contract, _, _ = contract_instance()
     captured_principle = []
     contract._test_gl.eq_principle = types.SimpleNamespace(
@@ -494,7 +494,9 @@ def test_consensus_criteria_allow_live_digest_variance_but_require_binding_agree
     }
     contract._assess(record, "PROVISIONAL", "")
     principle = captured_principle[0]
-    assert "source_bindings must match exactly" in principle
+    assert "exact set of BOUND source categories must match" in principle
+    assert "UNBOUND and UNAVAILABLE are both non-authorizing states and may differ" in principle
+    assert "Neither state may influence a corroborating outcome" in principle
     assert "evidence_digests and verbatim excerpts do not need to match byte-for-byte" in principle
     assert "independently validate and digest its own rendered source snapshot" in principle
     assert "preserve the same flight, date, route, window, and cause facts" in principle
