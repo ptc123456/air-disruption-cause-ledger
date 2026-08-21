@@ -463,7 +463,7 @@ def test_changing_one_byte_changes_digest():
     assert digest_a != digest_b
 
 
-def test_consensus_criteria_require_exact_digest_and_binding_status_agreement():
+def test_consensus_criteria_allow_live_digest_variance_but_require_binding_agreement():
     contract, _, _ = contract_instance()
     captured_principle = []
     contract._test_gl.eq_principle = types.SimpleNamespace(
@@ -495,8 +495,9 @@ def test_consensus_criteria_require_exact_digest_and_binding_status_agreement():
     contract._assess(record, "PROVISIONAL", "")
     principle = captured_principle[0]
     assert "source_bindings must match exactly" in principle
-    assert "evidence_digests mapping must match exactly" in principle
-    assert "verbatim substrings from the exact same digest-bound content" in principle
+    assert "evidence_digests and verbatim excerpts do not need to match byte-for-byte" in principle
+    assert "independently validate and digest its own rendered source snapshot" in principle
+    assert "preserve the same flight, date, route, window, and cause facts" in principle
 
 
 def test_unbound_evidence_is_excluded_from_outcome():

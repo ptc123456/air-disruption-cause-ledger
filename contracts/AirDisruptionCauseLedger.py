@@ -336,10 +336,12 @@ END UNTRUSTED REVISION DATA
             evaluate,
             principle=(
                 "The outcome field must match exactly. The source_bindings must match exactly for all categories. "
-                "The evidence_digests mapping must match exactly for all categories. "
+                "Each validator must independently validate and digest its own rendered source snapshot. Live page "
+                "bytes may legitimately differ between validators, so evidence_digests and verbatim excerpts do not "
+                "need to match byte-for-byte across validators. "
                 "The source_status must agree on which source categories were available and materially relevant. "
-                "Grounded excerpts must be verbatim substrings from the exact same digest-bound content and "
-                "preserve the same flight, date, route, and window facts. Explanations may differ in wording "
+                "Grounded excerpts must independently preserve the same flight, date, route, window, and cause facts. "
+                "Explanations may differ in wording "
                 "only when they preserve the same evidence limits."
             ),
         )
