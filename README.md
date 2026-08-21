@@ -21,9 +21,9 @@ The decision depends on nondeterministic public web evidence from the carrier, F
 
 ## How it works
 
-1. A submitter registers one exact carrier, flight number, date, route, and allowlisted evidence set.
+1. A submitter registers one exact carrier, flight number, date, route, UTC disruption window, and allowlisted evidence set.
 2. Any caller may request the provisional assessment while the case is `REGISTERED`.
-3. Validators independently evaluate the frozen sources and agree on one bounded outcome and explanation.
+3. Validators independently bind each rendered source to the flight, airports, date, and UTC window. The accepted result preserves a SHA-256 digest for every rendered snapshot and a literal excerpt for every `BOUND` source.
 4. A later BTS TranStats or FAA ASPM URL can trigger one revision assessment.
 5. Readers load the authoritative current record from the contract. Unsupported retries roll back without changing it.
 
@@ -104,19 +104,19 @@ $env:PYTHONUTF8='1'
 
 Verified at the documented release revision:
 
-- Python: `32 passed`
-- Vitest: `39 passed` in one tracked file
+- Python: `56 passed`
+- Vitest: `63 passed` in one tracked file
 - GenVM lint: 3 checks passed; semantic validation passed; 7 methods
 - Production build: 475 modules transformed successfully
 - `npm audit --omit=dev`: 0 vulnerabilities
-- Known non-blocking build warning: the main Vite chunk is approximately 723 kB before gzip
+- Known non-blocking build warning: the main Vite chunk is approximately 726 kB before gzip
 
 ## Deployment
 
 - Network: Studionet
 - Chain ID: `61999`
 - Release contract: `0x999c74695d3f417f01b530d3DE51cC95CE847F7b`
-- Deployed contract SHA-256: `058760c040a74af5d1a443ba7501c4f9ef4915b3a29a6652a8370a300f0ff7ab`
+- Current upgraded contract SHA-256: `63f5e2d86b926b9581ea2cefa0aa611cedda1754f2f06f8488d8022331a55ff5`
 - Recorded Studio deployer/upgrader: `0x277bF20771129ae224042d23b0311C1AC5a9AC1b`
 
 The deployed bytes, full live case lifecycle, rollback/no-mutation control, and isolated authorized/unauthorized upgrade rehearsal are recorded in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). The disposable rehearsal address is never used by the frontend.
@@ -131,6 +131,8 @@ The storage field order `cases`, `case_ids`, `upgrader_address` must not change 
 - Revision evidence accepts only `www.transtats.bts.gov` or `www.aspm.faa.gov`.
 - HTTPS, hostname, userinfo, port, deceptive-subdomain, category-swap, and carrier/flight-number checks run before state creation.
 - Retrieved pages are untrusted evidence; their embedded instructions are explicitly excluded from the model task.
+- An official hostname is not evidence binding. Each source is stored as `BOUND`, `UNBOUND`, or `UNAVAILABLE`; only the exact consensus `BOUND` set may authorize a corroborating outcome.
+- Every validator hashes its own exact bounded rendered snapshot. Snapshot bytes and literal excerpts may vary across validators, while outcome and the security-relevant `BOUND` set must agree.
 - Receipts and calldata are untrusted protocol boundaries and are checked against the saved operation before readback or retry.
 
 ## Known limitations

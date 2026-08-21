@@ -21,6 +21,19 @@ Status: `STUDIONET LIVE VERIFIED`
 
 The deployment reached `FINALIZED`, `MAJORITY_AGREE`, and authoritative leader `SUCCESS`. Live deployed-code bytes matched the recorded SHA-256, `get_upgrader` returned the constructor wallet, and the initial case list was empty.
 
+## Steward-remediation upgrade
+
+- Effective source commit: `aa307114c6539962a43b7cc2ab261925181b635d`
+- Git tree: `1cf90a4c847b0a63064d56f84754c5583e6abc9f`
+- Contract Git blob: `a1c6b387b1f65b8906aebd49a77d64f62e0ae01b`
+- Effective contract SHA-256: `63f5e2d86b926b9581ea2cefa0aa611cedda1754f2f06f8488d8022331a55ff5`
+- Final upgrade transaction: `0x2d2dfacd666d165145f10b16b3339e4e8a0efb1a76b3100e7357ee5858ca3377`
+- Decoded replacement payload: `22,191` bytes with the exact effective contract SHA-256
+
+The final upgrade reached `FINALIZED`, `MAJORITY_AGREE`, and authoritative leader `SUCCESS`. Storage and upgrader readbacks were preserved. The remediation freezes an exact UTC disruption window, classifies every source as `BOUND`, `UNBOUND`, or `UNAVAILABLE`, stores the SHA-256 of every exact bounded rendered snapshot, requires a literal excerpt for each `BOUND` source, and permits only the consensus `BOUND` set to authorize a corroborating outcome.
+
+Validators fetch live pages independently. Snapshot digests and literal excerpts may therefore differ byte-for-byte, and non-authorizing `UNBOUND`/`UNAVAILABLE` availability may differ. Consensus still requires the same outcome, the exact same set of `BOUND` categories, and agreement on material flight/date/route/window/cause facts and evidence limits.
+
 ## Production frontend
 
 - Vercel team: `shingg`
@@ -43,6 +56,26 @@ Git integration may create later equivalent production deployments, including af
 - Replayed revision negative control: `0x400df9d60279d26ee37a955ca96a4c0fe98e0bbc564d67b32fba124c6f6b95fa`
 
 The positive writes finalized with consensus agreement and authoritative leader success. Readback progressed from `REGISTERED` revision `0`, through `PROVISIONAL_ASSESSED` revision `1`, to `REVISED_ASSESSED` revision `2`. The final outcome was `INSUFFICIENT_EVIDENCE`, with `assistance_review_required = true`. The replayed revision finalized with the expected leader rollback and left stage, revision, outcome, source status, explanation, and revision URL unchanged.
+
+## Steward-remediation live acceptance
+
+Clean evidence case: `ADCL-REMED-002`
+
+- Registration: `0x5df5af70c2d36b238ae05057c42f487ade13923931ff4eaaeb4ae46e01bfe43a`
+- Provisional assessment: `0x21c29f59bc6e3f3959fd3ce2f8f97279810bbcb7212a789afc6d5a3a4ea8ed7b`
+- Revision assessment: `0xf32aaae70f9a1e7a76f438b0f1ea5cc31d8adf8ef00d6720b2edbb66218cb2b2`
+- Revision replay rollback: `0xe793c95318b52256972e1e570d971ca66588ec943e798224846a3f413937ef0c`
+- Duplicate-registration rollback: `0xe198471563bf4cf2265b6b76eb6cf2e0248f4551f2fef9f516383d88cc70c52e`
+
+The clean registration froze `DL105`, `ATL` to `LAX`, `2026-08-21`, and `2026-08-21T14:00Z` through `2026-08-21T18:00Z`. Provisional and revision assessments both finalized in round zero with `MAJORITY_AGREE` and successful leader/validator execution. The final readback is `REVISED_ASSESSED`, revision `2`, `INSUFFICIENT_EVIDENCE`, and assistance review required. Carrier was `UNAVAILABLE`; FAA, weather, and the generic BTS revision index were `UNBOUND`. Four lowercase 64-hex snapshot digests were persisted and all non-BOUND excerpts remained empty. The two negative controls finalized with consensus agreement and expected execution errors, leaving the complete result and provenance unchanged.
+
+Complete diagnostic history is retained:
+
+- `0x75019adb11bd7a26d1133837abd60bd1783bfbd5f90ca6cd3e53810a176dc075` registered `ADCL-REMED-001` with a user-entered trailing ` 4.` in the weather URL. It is excluded from the clean lifecycle but remains disclosed.
+- `0x608a5f19832433b38fe1ddade6551d71b330f9d056773849872c89ecfd3d346a` finalized `MAJORITY_DISAGREE` after three rotations because exact cross-validator snapshot-byte equality was too strict; no state was written.
+- `0x01d34585f857e83d2acf223b4cc341e12df5fdf1cc2c82f6deecdf0945e72f05` finalized `MAJORITY_DISAGREE` after three rotations because all availability status strings were still compared exactly; no state was written.
+
+Each live finding produced a new exact commit, fresh anonymous `PRE_DEPLOY` approval, exact-payload upgrade, and clean retry. Anonymous `POST_DEPLOY_TEST` review approved the final deployed revision and complete attempt history.
 
 ## Isolated upgrade rehearsal
 
